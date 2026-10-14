@@ -1,11 +1,11 @@
 name: AI開発依頼
-description: Claude実装 → Codex検証を自動起動
+description: Claude実装・PR作成（Codexレビューは別途設定）
 labels: []
 body:
   - type: markdown
     attributes:
       value: |
-        このIssueをリポジトリ所有者が作成すると、自動開発が開始されます。Goalと受入基準だけでも構いません。
+        Issueを作成した後、所有者が /build とコメントするとClaudeの自動開発が始まります。
   - type: textarea
     id: goal
     attributes:
