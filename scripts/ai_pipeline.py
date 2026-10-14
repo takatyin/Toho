@@ -17,7 +17,7 @@ SCHEMA = ROOT / "scripts" / "review_schema.json"
 MAX_REPAIRS = 2
 PROTECTED = (
     ".github/", "AGENTS.md", "CLAUDE.md",
-    "scripts/ai_pipeline.py", "scripts/review_schema.json",
+    "scripts/ai_pipeline.py", "scripts/review_schema.json", "scripts/verify.sh",
 )
 SENSITIVE = (".env", ".env.", ".pem", ".key", "id_rsa", "credentials.json")
 
