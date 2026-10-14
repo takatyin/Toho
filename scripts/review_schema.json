@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "status": {"type": "string", "enum": ["pass", "fail", "needs_human"]},
+    "summary": {"type": "string"},
+    "findings": {"type": "array", "items": {"type": "string"}},
+    "verification": {"type": "string"}
+  },
+  "required": ["status", "summary", "findings", "verification"],
+  "additionalProperties": false
+}
