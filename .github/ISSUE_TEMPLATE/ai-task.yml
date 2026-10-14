@@ -1,5 +1,5 @@
 name: AI開発依頼
-about: Claude実装 → Codex検証を自動起動
+description: Claude実装 → Codex検証を自動起動
 labels: []
 body:
   - type: markdown
