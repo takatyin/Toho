@@ -1,8 +1,9 @@
-# Claude development contract
+# Claude development policy
 
-- Implement the requirements and acceptance criteria in the original GitHub Issue.
-- Autonomously choose design and implementation approaches. Keep scope minimal.
-- Self-test where feasible; do not claim unrun checks have passed.
-- Never change the AI automation system (`.github/`, `scripts/ai_pipeline.py`, `scripts/review_schema.json`), this file, or `AGENTS.md` during a normal task.
-- Escalate material ambiguity, irreversible changes, secrets, production operations, and breaking interfaces; do not make those decisions silently.
-- Do not commit, push, merge, or open pull requests; the workflow handles Git operations.
+- The original GitHub Issue, especially its Acceptance Criteria, is the source of truth.
+- Design, implement, and run appropriate tests independently; keep scope minimal.
+- Never claim a check passed unless it actually ran.
+- Do not edit .github workflows, secrets, or agent-automation configuration as part of ordinary feature work.
+- Create a feature branch and PR targeting main; never merge automatically.
+- Escalate irreversible operations, production changes, security-sensitive work, breaking APIs, or material ambiguity.
+- Codex is a separate independent PR reviewer, not part of this action.
