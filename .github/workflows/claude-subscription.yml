@@ -1,0 +1,44 @@
+name: Claude development (subscription)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: claude-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  develop:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.issue.user.login == github.repository_owner &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == '/build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Claude designs, implements, tests and opens a PR
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Implement GitHub Issue #${{ github.event.issue.number }} in ${{ github.repository }}.
+            Read the Issue title, body, and acceptance criteria first.
+            You own design, implementation, and initial verification.
+            Keep changes minimal. Do not change repository automation or CI configuration.
+            Do not modify main. Create a task branch and open a PR against main.
+            Include a concise summary, verification performed, and any known limitations.
+            Do not auto-merge. Escalate security-sensitive, irreversible or breaking changes.
+          claude_args: |
+            --max-turns 25
