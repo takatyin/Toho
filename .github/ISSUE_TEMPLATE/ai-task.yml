@@ -1,0 +1,29 @@
+name: AI開発依頼
+about: Claude実装 → Codex検証を自動起動
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        このIssueをリポジトリ所有者が作成すると、自動開発が開始されます。Goalと受入基準だけでも構いません。
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal / 達成したいこと
+      placeholder: 何を実現したいかを具体的に記述
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria / 完了条件
+      placeholder: 例：入力Xを与えると出力Yになる。正常系と異常系をテストする。
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints / 制約（任意）
+      placeholder: 変更禁止・互換性・非目標など
+    validations:
+      required: false
