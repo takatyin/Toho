@@ -1,0 +1,77 @@
+name: AI development (Claude + Codex)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ai-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  develop:
+    # The workflow runs only for an explicit command posted by the repository owner
+    # on an Issue created by that owner. PR comments and other comments are ignored.
+    if: >-
+      github.event.comment.body == '/build' &&
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.issue.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - name: Checkout the default branch without persistent Git credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install Python and Node
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code and Codex CLIs
+        run: |
+          set -euo pipefail
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          npm install --global @openai/codex
+          "$HOME/.local/bin/claude" --version
+          codex --version
+
+      - name: Run development and independent review
+        id: ai
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python3 scripts/ai_pipeline.py
+
+      - name: Publish pull request or critical incident summary
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: python3 .github/scripts/publish_result.py
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ai_result.json
+            ${{ runner.temp }}/claude-*.log
+            ${{ runner.temp }}/codex-*.log
+            ${{ runner.temp }}/verify-*.log
+          if-no-files-found: ignore
+          retention-days: 7
