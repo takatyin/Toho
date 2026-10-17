@@ -64,3 +64,40 @@ jobs:
             echo "- Full tool transcript: disabled to protect secrets"
             echo "- A successful Action run does not prove a PR was created; inspect the PR tab."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize permission diagnostics safely
+        if: always()
+        env:
+          CLAUDE_EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          python3 .github/scripts/summarize_claude.py >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify task pull request was created
+        if: steps.claude.conclusion == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_STARTED_AT: ${{ github.event.comment.created_at }}
+          CLAUDE_BRANCH: ${{ steps.claude.outputs.branch_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## PR verification" >> "$GITHUB_STEP_SUMMARY"
+          # Only accept PRs created after the triggering comment, targeting main.
+          # Match the agent branch when available; otherwise require an Issue reference.
+          prs="$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=all&per_page=100")"
+          matches="$(jq -r --arg branch "$CLAUDE_BRANCH" --arg n "$ISSUE_NUMBER" --arg since "$RUN_STARTED_AT" '
+            [.[] | select(.base.ref == "main" and .created_at >= $since)
+             | select(
+                ($branch != "" and .head.ref == $branch)
+                or ((.body // "" | test("(?i)(close[sd]?|fix(e[sd])?|resolve[sd]?)?\\s*#"+$n+"([^0-9]|$)"))
+                    and .head.ref != "main")
+               )
+            ] | .[].html_url' <<< "$prs")"
+          if [[ -z "$matches" ]]; then
+            echo "- No matching PR was created by this run" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Claude Action finished but produced no PR for Issue #$ISSUE_NUMBER"
+            exit 1
+          fi
+          echo "- Matching PR detected" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$matches" >> "$GITHUB_STEP_SUMMARY"
