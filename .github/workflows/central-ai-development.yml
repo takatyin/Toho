@@ -1,0 +1,126 @@
+name: Central Claude AI development (manual pilot)
+
+# Central runner for other repositories. Deliberately not triggered by Issue events yet.
+# Requires GitHub App credentials and explicit workflow dispatch.
+on:
+  workflow_dispatch:
+    inputs:
+      target_repository:
+        description: 'Target repository (takatyin/name)'
+        required: true
+        type: string
+      issue_number:
+        description: 'Issue number containing requirements'
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-${{ inputs.target_repository }}-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    if: github.actor == 'takatyin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Validate request
+        env:
+          TARGET: ${{ inputs.target_repository }}
+          ISSUE: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET" =~ ^takatyin/[A-Za-z0-9_.-]+$ ]] || exit 1
+          [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || exit 1
+
+      - name: Authenticate GitHub App to target
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CENTRAL_GITHUB_APP_ID }}
+          private-key: ${{ secrets.CENTRAL_GITHUB_APP_PRIVATE_KEY }}
+          owner: takatyin
+          repositories: ${{ inputs.target_repository && format('{0}', inputs.target_repository) }}
+          permission-contents: write
+          permission-issues: read
+          permission-pull-requests: write
+
+      - name: Check out target repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repository }}
+          token: ${{ steps.app.outputs.token }}
+          persist-credentials: false
+          path: target
+          fetch-depth: 1
+
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare issue and branch
+        working-directory: target
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TARGET: ${{ inputs.target_repository }}
+          ISSUE: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          gh issue view "$ISSUE" --repo "$TARGET" --json title,body --jq '"Title: " + .title + "\n\n" + .body' > "$RUNNER_TEMP/central-issue.txt"
+          git switch -c "ai/issue-${ISSUE}-${GITHUB_RUN_ID}"
+          cat > "$RUNNER_TEMP/central-task.txt" <<'PROMPT'
+          Implement the GitHub Issue quoted below in this repository.
+          Design, implement and self-test locally. Make actual code changes.
+          Do not commit, push, switch branches, open PRs, deploy, or use network.
+          Do not edit .github/, secrets, AGENTS.md or CLAUDE.md.
+          Keep the scope minimal. Do not claim tests passed unless executed.
+          PROMPT
+          cat "$RUNNER_TEMP/central-issue.txt" >> "$RUNNER_TEMP/central-task.txt"
+
+      - name: Claude Opus implements locally
+        working-directory: target
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_CODE_EFFORT_LEVEL: medium
+        run: |
+          set -euo pipefail
+          test -n "$CLAUDE_CODE_OAUTH_TOKEN"
+          claude -p --model opus \
+            --permission-mode acceptEdits \
+            --allowedTools 'Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(python:*)' \
+            --max-turns 25 --output-format text \
+            < "$RUNNER_TEMP/central-task.txt" > "$RUNNER_TEMP/central-claude-output.txt"
+
+      - name: Validate and publish PR (GitHub App)
+        working-directory: target
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TARGET: ${{ inputs.target_repository }}
+          ISSUE: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "::error::No implementation changes detected"
+            exit 1
+          fi
+          if git diff --cached --name-only | grep -E '(^\.github/|^AGENTS\.md$|^CLAUDE\.md$|(^|/)\.env($|\.)|(^|/)__pycache__/|\.pyc$|\.(pem|key)$)'; then
+            echo "::error::Unsafe or generated files in change set"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Implement issue #$ISSUE"
+          gh auth setup-git
+          branch="$(git branch --show-current)"
+          git push origin "$branch"
+          url="$(gh pr create --repo "$TARGET" --base main --head "$branch" \
+            --title "Implement issue #$ISSUE" \
+            --body "Implements #$ISSUE. Claude Opus (medium) implemented this change. Codex independent review and human approval are required. No automatic merge.")"
+          echo "## PR created" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
