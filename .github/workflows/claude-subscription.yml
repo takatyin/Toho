@@ -6,10 +6,8 @@ on:
 
 permissions:
   contents: write
-  issues: write
+  issues: read
   pull-requests: write
-  id-token: write
-  actions: read
 
 concurrency:
   group: claude-issue-${{ github.event.issue.number }}
@@ -21,83 +19,85 @@ jobs:
       github.event.issue.pull_request == null &&
       github.event.issue.user.login == github.repository_owner &&
       github.event.comment.user.login == github.repository_owner &&
-      startsWith(github.event.comment.body, '/build')
+      (github.event.comment.body == '/build' ||
+       startsWith(github.event.comment.body, '/build\n'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Claude designs, implements, tests and opens a PR
-        id: claude
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          display_report: 'true'
-          show_full_output: 'false'
-          prompt: |
-            Implement GitHub Issue #${{ github.event.issue.number }} in ${{ github.repository }}.
-            Read the original Issue title, body, and acceptance criteria first using the available GitHub tools.
-            You own design, implementation, and initial verification.
-            Keep changes minimal. Do not change repository automation or CI configuration.
-            Do not modify main. Use the Action's built-in branch and PR support where available. Make source changes and ensure a PR targeting main is opened for this Issue.
-            Include a concise summary, verification performed, and any known limitations.
-            Do not auto-merge. Escalate security-sensitive, irreversible or breaking changes.
-          claude_args: |
-            --max-turns 25
-            --allowedTools "Bash(python3:*),Bash(gh issue view:*),Bash(gh pr create:*),Bash(git status:*),Bash(git diff:*)"
 
-      - name: Safe execution diagnostics
-        if: always()
-        env:
-          CLAUDE_CONCLUSION: ${{ steps.claude.outputs.conclusion }}
-          CLAUDE_BRANCH: ${{ steps.claude.outputs.branch_name }}
+      - name: Install Claude Code
         run: |
-          {
-            echo "## Claude execution diagnostics"
-            echo "- Action conclusion: ${CLAUDE_CONCLUSION:-not reported}"
-            if [[ -n "${CLAUDE_BRANCH}" ]]; then
-              echo "- Claude branch created: yes"
-            else
-              echo "- Claude branch created: no / not reported"
-            fi
-            echo "- Full tool transcript: disabled to protect secrets"
-            echo "- A successful Action run does not prove a PR was created; inspect the PR tab."
-          } >> "$GITHUB_STEP_SUMMARY"
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Summarize permission diagnostics safely
-        if: always()
-        env:
-          CLAUDE_EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
-        run: |
-          python3 .github/scripts/summarize_claude.py >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Verify task pull request was created
-        if: steps.claude.conclusion == 'success'
+      - name: Prepare task and branch
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          RUN_STARTED_AT: ${{ github.event.comment.created_at }}
-          CLAUDE_BRANCH: ${{ steps.claude.outputs.branch_name }}
-        shell: bash
         run: |
           set -euo pipefail
-          echo "## PR verification" >> "$GITHUB_STEP_SUMMARY"
-          # Only accept PRs created after the triggering comment, targeting main.
-          # Match the agent branch when available; otherwise require an Issue reference.
-          prs="$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=all&per_page=100")"
-          matches="$(jq -r --arg branch "$CLAUDE_BRANCH" --arg n "$ISSUE_NUMBER" --arg since "$RUN_STARTED_AT" '
-            [.[] | select(.base.ref == "main" and .created_at >= $since)
-             | select(
-                ($branch != "" and .head.ref == $branch)
-                or ((.body // "" | test("(?i)(close[sd]?|fix(e[sd])?|resolve[sd]?)?\\s*#"+$n+"([^0-9]|$)"))
-                    and .head.ref != "main")
-               )
-            ] | .[].html_url' <<< "$prs")"
-          if [[ -z "$matches" ]]; then
-            echo "- No matching PR was created by this run" >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Claude Action finished but produced no PR for Issue #$ISSUE_NUMBER"
+          gh issue view "$ISSUE_NUMBER" --json title,body --jq '"Title: " + .title + "\n\n" + .body' > "$RUNNER_TEMP/issue.txt"
+          git switch -c "ai/issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID}"
+          cat > "$RUNNER_TEMP/task.txt" <<'PROMPT'
+          Implement the original GitHub Issue provided after these instructions.
+          You are responsible for design, implementation, and self-testing.
+          Make actual file edits in the checked-out repository. Do NOT commit, push,
+          open a PR, or change branches; GitHub Actions owns publication.
+          Do not alter .github/, AGENTS.md, CLAUDE.md, scripts/verify.sh,
+          or secrets/credentials. Do not access external services.
+          Keep changes minimal; do not claim unrun tests passed.
+          If you cannot implement the requirements, explain why instead of
+          inventing results. Stop after completing the local changes and tests.
+          PROMPT
+          cat "$RUNNER_TEMP/issue.txt" >> "$RUNNER_TEMP/task.txt"
+
+      - name: Claude implements and self-tests
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLAUDE_CODE_OAUTH_TOKEN"
+          "$HOME/.local/bin/claude" -p \
+            --permission-mode acceptEdits \
+            --allowedTools 'Read,Write,Edit,Glob,Grep,Bash(python3:*),Bash(python:*)' \
+            --max-turns 25 \
+            --output-format text < "$RUNNER_TEMP/task.txt" > "$RUNNER_TEMP/claude-output.txt"
+          echo "Claude completed. Tool transcript is not made public."
+
+      - name: Validate local changes
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "::error::Claude made no file changes"
             exit 1
           fi
-          echo "- Matching PR detected" >> "$GITHUB_STEP_SUMMARY"
-          printf '%s\n' "$matches" >> "$GITHUB_STEP_SUMMARY"
+          if git diff --cached --name-only | grep -E '^(\.github/|AGENTS\.md$|CLAUDE\.md$|scripts/verify\.sh$|\.env($|\.)|.*\.(pem|key)$)'; then
+            echo "::error::Protected file change detected; refusing to publish"
+            exit 1
+          fi
+          echo "## Claude development" >> "$GITHUB_STEP_SUMMARY"
+          echo "Files changed: $(git diff --cached --name-only | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Review and test evidence must be checked in the PR." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit, push and create PR (GitHub Actions only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Implement issue #$ISSUE_NUMBER"
+          gh auth setup-git
+          branch="$(git branch --show-current)"
+          git push origin "$branch"
+          url="$(gh pr create --base main --head "$branch" \
+            --title "Implement issue #$ISSUE_NUMBER" \
+            --body "Implements #$ISSUE_NUMBER. Claude performed implementation and initial checks. Independent Codex review and human approval are still required. No automatic merge.")"
+          echo "## Pull request" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
