@@ -29,9 +29,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Claude designs, implements, tests and opens a PR
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          display_report: 'true'
+          show_full_output: 'false'
           prompt: |
             Implement GitHub Issue #${{ github.event.issue.number }} in ${{ github.repository }}.
             Read the Issue title, body, and acceptance criteria first.
@@ -43,3 +46,21 @@ jobs:
           claude_args: |
             --max-turns 25
             --allowedTools "Bash(python3:*)"
+
+      - name: Safe execution diagnostics
+        if: always()
+        env:
+          CLAUDE_CONCLUSION: ${{ steps.claude.outputs.conclusion }}
+          CLAUDE_BRANCH: ${{ steps.claude.outputs.branch_name }}
+        run: |
+          {
+            echo "## Claude execution diagnostics"
+            echo "- Action conclusion: ${CLAUDE_CONCLUSION:-not reported}"
+            if [[ -n "${CLAUDE_BRANCH}" ]]; then
+              echo "- Claude branch created: yes"
+            else
+              echo "- Claude branch created: no / not reported"
+            fi
+            echo "- Full tool transcript: disabled to protect secrets"
+            echo "- A successful Action run does not prove a PR was created; inspect the PR tab."
+          } >> "$GITHUB_STEP_SUMMARY"
