@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       target_repository:
-        description: 'Target repository (takatyin/name)'
+        description: 'Target repository name only (e.g. MyProject)'
         required: true
         type: string
       issue_number:
@@ -29,11 +29,11 @@ jobs:
     steps:
       - name: Validate request
         env:
-          TARGET: ${{ inputs.target_repository }}
+          TARGET: takatyin/${{ inputs.target_repository }}
           ISSUE: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
-          [[ "$TARGET" =~ ^takatyin/[A-Za-z0-9_.-]+$ ]] || exit 1
+          [[ "$TARGET" =~ ^[A-Za-z0-9_.-]+$ ]] || exit 1
           [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || exit 1
 
       - name: Authenticate GitHub App to target
@@ -43,7 +43,7 @@ jobs:
           app-id: ${{ secrets.CENTRAL_GITHUB_APP_ID }}
           private-key: ${{ secrets.CENTRAL_GITHUB_APP_PRIVATE_KEY }}
           owner: takatyin
-          repositories: ${{ inputs.target_repository && format('{0}', inputs.target_repository) }}
+          repositories: ${{ inputs.target_repository }}
           permission-contents: write
           permission-issues: read
           permission-pull-requests: write
@@ -51,7 +51,7 @@ jobs:
       - name: Check out target repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.target_repository }}
+          repository: takatyin/${{ inputs.target_repository }}
           token: ${{ steps.app.outputs.token }}
           persist-credentials: false
           path: target
