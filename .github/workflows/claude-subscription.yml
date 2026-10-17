@@ -19,8 +19,7 @@ jobs:
       github.event.issue.pull_request == null &&
       github.event.issue.user.login == github.repository_owner &&
       github.event.comment.user.login == github.repository_owner &&
-      (github.event.comment.body == '/build' ||
-       startsWith(github.event.comment.body, '/build\n'))
+      startsWith(github.event.comment.body, '/build')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
