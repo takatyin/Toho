@@ -21,7 +21,7 @@ jobs:
       github.event.issue.pull_request == null &&
       github.event.issue.user.login == github.repository_owner &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == '/build'
+      startsWith(github.event.comment.body, '/build')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -40,6 +40,6 @@ jobs:
             Do not modify main. Create a task branch and open a PR against main.
             Include a concise summary, verification performed, and any known limitations.
             Do not auto-merge. Escalate security-sensitive, irreversible or breaking changes.
-            claude_args: |
-              --max-turns 25
-              --allowedTools "Bash(python3:*),Bash(git:*)"
+          claude_args: |
+            --max-turns 25
+            --allowedTools "Bash(python3:*)"
