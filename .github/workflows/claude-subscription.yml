@@ -37,15 +37,15 @@ jobs:
           show_full_output: 'false'
           prompt: |
             Implement GitHub Issue #${{ github.event.issue.number }} in ${{ github.repository }}.
-            Read the Issue title, body, and acceptance criteria first.
+            Read the original Issue title, body, and acceptance criteria first using the available GitHub tools.
             You own design, implementation, and initial verification.
             Keep changes minimal. Do not change repository automation or CI configuration.
-            Do not modify main. Create a task branch and open a PR against main.
+            Do not modify main. Use the Action's built-in branch and PR support where available. Make source changes and ensure a PR targeting main is opened for this Issue.
             Include a concise summary, verification performed, and any known limitations.
             Do not auto-merge. Escalate security-sensitive, irreversible or breaking changes.
           claude_args: |
             --max-turns 25
-            --allowedTools "Bash(python3:*)"
+            --allowedTools "Bash(python3:*),Bash(gh issue view:*),Bash(gh pr create:*),Bash(git status:*),Bash(git diff:*)"
 
       - name: Safe execution diagnostics
         if: always()
