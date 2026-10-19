@@ -97,7 +97,7 @@ def invoke_codex(issue_text, verification_ok, verification_log, round_num):
         + "ORIGINAL ISSUE:\n" + issue_text[:25000] + "\n\n"
         + "AUTOMATED VERIFICATION PASSED: " + str(verification_ok) + "\n"
         + "VERIFICATION LOG (tail):\n" + verification_log[-3500:] + "\n"
-        + "Return ONLY JSON conforming to the provided schema."
+        + "Write the JSON summary and each findings item in Japanese for human-facing reporting. Keep internal reasoning and code analysis in English. Return ONLY JSON conforming to the provided schema."
     )
     environment = os.environ.copy()
     environment.pop("ANTHROPIC_API_KEY", None)
