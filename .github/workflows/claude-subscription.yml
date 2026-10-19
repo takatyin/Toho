@@ -107,7 +107,7 @@ jobs:
           branch="$(git branch --show-current)"
           git push origin "$branch"
           url="$(gh pr create --base main --head "$branch" \
-            --title "Implement issue #$ISSUE_NUMBER" \
-            --body "Implements #$ISSUE_NUMBER. Claude performed implementation and initial checks. Independent Codex review and human approval are still required. No automatic merge.")"
+            --title "[実装] Issue #$ISSUE_NUMBER" \
+            --body "Issue #$ISSUE_NUMBER の実装です。Claudeによる実装と初期チェックを実施しました。テストの詳細はActionsログをご確認ください。Codexの独立レビューと人間による承認が必要です。自動マージは行いません。")"
           echo "## Pull request" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"

@@ -39,32 +39,32 @@ def main():
         run(["gh", "auth", "setup-git"])
         run(["git", "push", "--set-upstream", "origin", branch])
         pr_body = (
-            f"Automated implementation for #{issue_no}.\n\n"
-            f"Claude developed the changes; Codex independently reviewed them.\n\n"
-            f"**Result:** {status}\n\n**Review:** {summary}\n\n"
-            + ("**Findings:**\n" + "\n".join("- " + str(x)[:400] for x in findings[:8]) + "\n\n" if findings else "")
-            + f"**Actions run:** {run_link}\n\n"
-            + "Merge requires a human decision. Do not assume tests passed without checking the verification log."
+            f"Issue #{issue_no} の自動実装です。\n\n"
+            f"Claudeが実装し、Codexが独立検証しました。\n\n"
+            f"**判定:** {status}\n\n**レビュー要約:** {summary}\n\n"
+            + ("**指摘事項:**\n" + "\n".join("- " + str(x)[:400] for x in findings[:8]) + "\n\n" if findings else "")
+            + f"**Actions実行履歴:** {run_link}\n\n"
+            + "マージには人間による判断が必要です。検証ログを確認せずにテスト成功と判断しないでください。"
         )
         args = ["gh", "pr", "create", "--repo", repo, "--base", "main",
-                "--head", branch, "--title", f"AI implementation: issue #{issue_no}",
+                "--head", branch, "--title", f"[実装] Issue #{issue_no}",
                 "--body", pr_body]
         if status != "pass":
             args.append("--draft")
         issue_link = run(args).stdout.strip()
 
     label = {
-        "pass": "AI implementation and independent verification completed",
-        "needs_human": "Human review required",
-        "error": "AI pipeline failed",
-    }.get(status, "AI pipeline stopped")
+        "pass": "AI実装・独立検証完了",
+        "needs_human": "人間による確認が必要",
+        "error": "AIパイプライン失敗",
+    }.get(status, "AIパイプライン停止")
     comment = (
         f"### {label}\n\n"
         f"{summary}\n\n"
-        + (f"Pull request: {issue_link}\n\n" if issue_link else "")
-        + (("Codex findings:\n" + "\n".join("- " + str(x)[:400] for x in findings[:8]) + "\n\n") if findings else "")
-        + f"Actions log: {run_link}\n\n"
-        + ("No automatic merge was performed." if issue_link else "No pull request was created.")
+        + (f"プルリクエスト: {issue_link}\n\n" if issue_link else "")
+        + (("Codexの指摘事項:\n" + "\n".join("- " + str(x)[:400] for x in findings[:8]) + "\n\n") if findings else "")
+        + f"Actionsログ: {run_link}\n\n"
+        + ("自動マージは行っていません。" if issue_link else "プルリクエストは作成されませんでした。")
     )
     run(["gh", "issue", "comment", issue_no, "--repo", repo, "--body", comment])
     print(comment)
