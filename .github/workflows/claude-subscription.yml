@@ -53,6 +53,15 @@ jobs:
           PROMPT
           cat "$RUNNER_TEMP/issue.txt" >> "$RUNNER_TEMP/task.txt"
 
+      - name: Assess design risk before implementation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          gh issue view "$ISSUE_NUMBER" --json title,body,labels > "$RUNNER_TEMP/design-issue.json"
+          python3 .github/scripts/design_preflight.py "$RUNNER_TEMP/design-issue.json"
+
       - name: Claude implements and self-tests
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
