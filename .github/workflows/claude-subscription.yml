@@ -108,14 +108,6 @@ jobs:
           git push origin "$branch"
           url="$(gh pr create --base main --head "$branch" \
             --title "[実装] Issue #$ISSUE_NUMBER" \
-            --body "## 概要
-          Issue #$ISSUE_NUMBER の実装です。
-
-          ## 検証状況
-          Claudeによる実装と初期チェックを実施しました。テストの詳細はActionsのログを確認してください。
-          Codexによる独立レビューと人間による承認は未完了です。
-
-          ## マージ方針
-          自動マージは行いません。")"
+            --body "Issue #$ISSUE_NUMBER の実装です。Claudeによる実装と初期チェックを実施しました。テストの詳細はActionsログをご確認ください。Codexの独立レビューと人間による承認が必要です。自動マージは行いません。")"
           echo "## Pull request" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"
