@@ -120,7 +120,7 @@ jobs:
           branch="$(git branch --show-current)"
           git push origin "$branch"
           url="$(gh pr create --repo "takatyin/$TARGET" --base main --head "$branch" \
-            --title "Implement issue #$ISSUE" \
-            --body "Implements #$ISSUE. Claude Opus (medium) implemented this change. Codex independent review and human approval are required. No automatic merge.")"
+            --title "[実装] Issue #$ISSUE" \
+            --body "Issue #$ISSUE の実装です。Claude Opus (medium)で実装しました。テスト結果はActionsログで確認してください。Codexの独立レビューと人間による承認が必要です。自動マージは行いません。")"
           echo "## PR created" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"
